@@ -53,4 +53,5 @@ func main() {
         return
     }
     fmt.Println("All requests failed")
+    os.Exit(1)
 }
