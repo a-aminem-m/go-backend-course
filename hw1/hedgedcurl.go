@@ -4,6 +4,7 @@ import (
     "flag"
     "fmt"
     "io"
+    "net"
     "net/http"
     "os"
     "time"
@@ -63,13 +64,20 @@ func main() {
             results <- result{url: url, text: text,}            
         }(url)
     }
+    timeoutError := false
     for range urls {
         res := <-results
         if res.err != nil {
+            if err, ok := res.err.(net.Error); ok && err.Timeout() {
+                timeoutError = true
+            }
             continue
         }
         fmt.Println(res.text)
         return
+    }
+    if timeoutError {
+        os.Exit(228)
     }
     fmt.Println("All requests failed")
     os.Exit(1)
