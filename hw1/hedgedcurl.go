@@ -1,10 +1,12 @@
 package main
 
 import (
+    "flag"
     "fmt"
     "io"
     "net/http"
     "os"
+    "time"
 )
 
 type result struct {
@@ -14,15 +16,32 @@ type result struct {
 }
 
 func main() {
+    timeoutValue := 15
+    flag.IntVar(
+        &timeoutValue,
+        "timeout",
+        timeoutValue,
+        "timeout fot HTTP-requests in sec",
+    )
+    flag.IntVar(
+        &timeoutValue,
+        "t",
+        timeoutValue,
+        "timeout for HTTP-requests in sec",
+    )
+    flag.Parse()
     if len(os.Args) < 2 {
         fmt.Println("Please provide a url")
         return
     }
     results := make(chan result)
-    urls := os.Args[1:]
+    urls := flag.Args()
+    client := http.Client{
+        Timeout: time.Duration(timeoutValue) * time.Second,
+    }
     for _, url := range urls {
         go func(url string) {
-            resp, err := http.Get(url)
+            resp, err := client.Get(url)
             if err != nil {
                 results <- result{url:url, err: err,}
                 return
