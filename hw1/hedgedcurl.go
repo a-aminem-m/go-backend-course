@@ -30,12 +30,12 @@ func main() {
 		"timeout for HTTP-requests in sec",
 	)
 	flag.Parse()
-	if len(os.Args) < 2 {
-		fmt.Println("Please provide a url")
-		return
-	}
 	results := make(chan result)
 	urls := flag.Args()
+	if len(urls) == 0 {
+		fmt.Println("Please provide a url")
+		os.Exit(1)
+	}
 	client := http.Client{
 		Timeout: time.Duration(timeoutValue) * time.Second,
 	}
