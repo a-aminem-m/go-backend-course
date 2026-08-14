@@ -30,7 +30,7 @@ func main() {
 		"timeout for HTTP-requests in sec",
 	)
 	flag.Parse()
-	results := make(chan result)
+	results := make(chan result, len(urls))
 	urls := flag.Args()
 	if len(urls) == 0 {
 		fmt.Println("Please provide a url")
