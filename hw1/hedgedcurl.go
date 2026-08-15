@@ -16,6 +16,13 @@ type result struct {
 }
 
 func main() {
+	flag.Usage = func() {
+		fmt.Println("Usage:")
+		fmt.Println("  hedgedcurl [options] URL [URL...]")
+		fmt.Println()
+		fmt.Println("Options:")
+		flag.PrintDefaults()
+	}
 	timeoutValue := 15
 	flag.IntVar(
 		&timeoutValue,
@@ -30,8 +37,12 @@ func main() {
 		"timeout for HTTP-requests in sec",
 	)
 	flag.Parse()
-	results := make(chan result, len(urls))
+	if timeoutValue <= 0 {
+		fmt.Println("Timeout must be greater than 0")
+		os.Exit(1)
+	}
 	urls := flag.Args()
+	results := make(chan result, len(urls))
 	if len(urls) == 0 {
 		fmt.Println("Please provide a url")
 		os.Exit(1)
