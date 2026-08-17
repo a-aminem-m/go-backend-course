@@ -23,12 +23,14 @@ func main() {
 			continue
 		}
 
-		_, err := conn.Write([]byte("OK\n"))
-		if err != nil {
-			fmt.Println("Write failed:", err)
-			conn.Close()
-			continue
-		}
-		conn.Close()
+		go func(conn net.Conn) {
+			defer conn.Close()
+
+			_, err := conn.Write([]byte("OK\n"))
+			if err != nil {
+				fmt.Println("Write failed:", err)
+				return
+			}
+		}(conn)
 	}
 }
