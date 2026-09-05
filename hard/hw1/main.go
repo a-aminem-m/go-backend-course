@@ -6,6 +6,7 @@ import (
 
 func main() {
 	storage := NewMemoryStorage()
-	_ = storage
+	http.HandleFunc("/task", createTaskHandler(storage))
+	http.HandleFunc("/status/", getTaskStatusHandler(storage))
 	http.ListenAndServe(":8000", nil)
 }
