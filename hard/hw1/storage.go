@@ -1,7 +1,10 @@
 package main
 
+import "sync"
+
 type MemoryStorage struct {
 	tasks map[string]Task
+	mu    sync.RWMutex
 }
 
 func NewMemoryStorage() *MemoryStorage {
