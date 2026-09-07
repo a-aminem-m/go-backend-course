@@ -10,5 +10,6 @@ func main() {
 	http.HandleFunc("/status/", getTaskStatusHandler(storage))
 	http.HandleFunc("/result/", getTaskResultHandler(storage))
 	http.HandleFunc("/register", registerHandler(storage))
+	http.HandleFunc("/login", loginHandler(storage))
 	http.ListenAndServe(":8000", nil)
 }
