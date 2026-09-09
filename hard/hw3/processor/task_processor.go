@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"hard-hw1/models"
 	"log"
+	"time"
 
 	"github.com/moby/moby/api/pkg/stdcopy"
 	"github.com/moby/moby/api/types/container"
@@ -47,6 +48,7 @@ func processTask(task models.CodeTaskMessage) {
 		return
 	}
 
+	start := time.Now()
 	cli, err := client.New(
 		client.FromEnv,
 	)
@@ -140,6 +142,10 @@ func processTask(task models.CodeTaskMessage) {
 
 	output := stdout.String() + stderr.String()
 
+	duration := time.Since(start).Seconds()
+
+	taskDuration.WithLabelValues(task.Translator).Observe(duration)
+	tasksTotal.WithLabelValues(task.Translator).Inc()
 	log.Printf("Container output: %s", output)
 	err = sendResult(task.TaskID, string(output))
 	if err != nil {
