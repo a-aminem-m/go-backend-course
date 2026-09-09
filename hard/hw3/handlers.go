@@ -1,12 +1,14 @@
 package main
 
 import (
+	"database/sql"
 	"encoding/json"
 	"hard-hw1/models"
 	"net/http"
 	"strings"
 
 	"github.com/google/uuid"
+	"github.com/redis/go-redis/v9"
 )
 
 type PostTaskResponse struct {
@@ -35,13 +37,13 @@ type LoginResponse struct {
 	Token string `json:"token"`
 }
 
-func createTaskHandler(storage *MemoryStorage) http.HandlerFunc {
+func createTaskHandler(db *sql.DB, rdb *redis.Client) http.HandlerFunc {
 	handler := func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodPost {
 			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
 			return
 		}
-		if !checkAuth(storage, r) {
+		if !checkAuth(rdb, r) {
 			http.Error(w, "unauthorized", http.StatusUnauthorized)
 			return
 		}
@@ -54,7 +56,11 @@ func createTaskHandler(storage *MemoryStorage) http.HandlerFunc {
 		task.ID = uuid.New().String()
 		task.Status = StatusInProgress
 		task.Result = ""
-		storage.CreateTask(task)
+		err = CreateTask(db, task)
+		if err != nil {
+			http.Error(w, "failed to create task", http.StatusInternalServerError)
+			return
+		}
 		message := models.CodeTaskMessage{
 			TaskID:     task.ID,
 			Translator: task.Translator,
@@ -75,18 +81,18 @@ func createTaskHandler(storage *MemoryStorage) http.HandlerFunc {
 	return handler
 }
 
-func getTaskStatusHandler(storage *MemoryStorage) http.HandlerFunc {
+func getTaskStatusHandler(db *sql.DB, rdb *redis.Client) http.HandlerFunc {
 	handler := func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodGet {
 			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
 			return
 		}
-		if !checkAuth(storage, r) {
+		if !checkAuth(rdb, r) {
 			http.Error(w, "unauthorized", http.StatusUnauthorized)
 			return
 		}
 		id := strings.TrimPrefix(r.URL.Path, "/status/")
-		task, ok := storage.GetTask(id)
+		task, ok := GetTask(db, id)
 		if !ok {
 			http.Error(w, "task not found", http.StatusNotFound)
 			return
@@ -101,18 +107,18 @@ func getTaskStatusHandler(storage *MemoryStorage) http.HandlerFunc {
 	return handler
 }
 
-func getTaskResultHandler(storage *MemoryStorage) http.HandlerFunc {
+func getTaskResultHandler(db *sql.DB, rdb *redis.Client) http.HandlerFunc {
 	handler := func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodGet {
 			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
 			return
 		}
-		if !checkAuth(storage, r) {
+		if !checkAuth(rdb, r) {
 			http.Error(w, "unauthorized", http.StatusUnauthorized)
 			return
 		}
 		id := strings.TrimPrefix(r.URL.Path, "/result/")
-		task, ok := storage.GetTask(id)
+		task, ok := GetTask(db, id)
 		if !ok {
 			http.Error(w, "task not found", http.StatusNotFound)
 			return
@@ -127,7 +133,7 @@ func getTaskResultHandler(storage *MemoryStorage) http.HandlerFunc {
 	return handler
 }
 
-func registerHandler(storage *MemoryStorage) http.HandlerFunc {
+func registerHandler(db *sql.DB) http.HandlerFunc {
 	handler := func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodPost {
 			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
@@ -143,13 +149,17 @@ func registerHandler(storage *MemoryStorage) http.HandlerFunc {
 		user.ID = uuid.New().String()
 		user.Login = request.Username
 		user.Password = request.Password
-		storage.CreateUser(user)
+		err = CreateUser(db, user)
+		if err != nil {
+			http.Error(w, "failed to create user", http.StatusInternalServerError)
+			return
+		}
 		w.WriteHeader(http.StatusCreated)
 	}
 	return handler
 }
 
-func loginHandler(storage *MemoryStorage) http.HandlerFunc {
+func loginHandler(db *sql.DB, rdb *redis.Client) http.HandlerFunc {
 	handler := func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodPost {
 			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
@@ -161,7 +171,7 @@ func loginHandler(storage *MemoryStorage) http.HandlerFunc {
 			http.Error(w, "invalid request body", http.StatusBadRequest)
 			return
 		}
-		user, ok := storage.GetUser(request.Username)
+		user, ok := GetUser(db, request.Username)
 		if !ok || request.Password != user.Password {
 			http.Error(w, "user unauthorized", http.StatusUnauthorized)
 			return
@@ -169,7 +179,11 @@ func loginHandler(storage *MemoryStorage) http.HandlerFunc {
 		var session Session
 		session.UserID = user.ID
 		session.SessionID = uuid.New().String()
-		storage.CreateSession(session)
+		err = CreateSession(rdb, session)
+		if err != nil {
+			http.Error(w, "failed to create session", http.StatusInternalServerError)
+			return
+		}
 		response := LoginResponse{
 			Token: session.SessionID,
 		}
@@ -180,17 +194,19 @@ func loginHandler(storage *MemoryStorage) http.HandlerFunc {
 	return handler
 }
 
-func checkAuth(storage *MemoryStorage, r *http.Request) bool {
+func checkAuth(rdb *redis.Client, r *http.Request) bool {
 	authHeader := r.Header.Get("Authorization")
 	if !strings.HasPrefix(authHeader, "Bearer ") {
 		return false
 	}
+
 	token := strings.TrimPrefix(authHeader, "Bearer ")
-	_, ok := storage.GetSession(token)
+
+	_, ok := GetSession(rdb, token)
 	return ok
 }
 
-func commitTaskHandler(storage *MemoryStorage) http.HandlerFunc {
+func commitTaskHandler(db *sql.DB) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodPost {
 			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
@@ -205,7 +221,7 @@ func commitTaskHandler(storage *MemoryStorage) http.HandlerFunc {
 			return
 		}
 
-		task, ok := storage.GetTask(request.TaskID)
+		task, ok := GetTask(db, request.TaskID)
 		if !ok {
 			http.Error(w, "task not found", http.StatusNotFound)
 			return
@@ -214,7 +230,11 @@ func commitTaskHandler(storage *MemoryStorage) http.HandlerFunc {
 		task.Result = request.Result
 		task.Status = StatusReady
 
-		storage.UpdateTask(task)
+		err = UpdateTask(db, task)
+		if err != nil {
+			http.Error(w, "failed to update task", http.StatusInternalServerError)
+			return
+		}
 
 		w.WriteHeader(http.StatusOK)
 	}
