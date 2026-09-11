@@ -1,0 +1,28 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Build code runner
+        run: docker build -t code-runner ./processor
+
+      - name: Start services
+        run: docker compose up --build -d
+
+      - name: Install test dependencies
+        run: pip install pytest requests
+
+      - name: Run tests
+        run: pytest -v tests/tests.py
+
+      - name: Stop services
+        if: always()
+        run: docker compose down
