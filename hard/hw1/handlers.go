@@ -2,10 +2,11 @@ package main
 
 import (
 	"encoding/json"
-	"github.com/google/uuid"
 	"net/http"
 	"strings"
 	"time"
+
+	"github.com/google/uuid"
 )
 
 type PostTaskResponse struct {
@@ -49,12 +50,12 @@ func createTaskHandler(storage *MemoryStorage) http.HandlerFunc {
 		task.Status = StatusInProgress
 		task.Result = ""
 		storage.CreateTask(task)
-		go func() {
+		go func(taskCopy Task) {
 			time.Sleep(3 * time.Second)
-			task.Status = StatusReady
-			task.Result = "fake result"
-			storage.UpdateTask(task)
-		}()
+			taskCopy.Status = StatusReady
+			taskCopy.Result = "fake result"
+			storage.UpdateTask(taskCopy)
+		}(task)
 		response := PostTaskResponse{
 			TaskID: task.ID,
 		}
